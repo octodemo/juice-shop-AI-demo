@@ -13,6 +13,30 @@ import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
 import logger from '../lib/logger'
 
+// Allow-list for permitted hostnames
+const allowedHostnames = [
+  'images.unsplash.com',
+  'cdn.pixabay.com',
+  'images.pexels.com',
+  // add other trusted public image hosts as needed
+]
+
+function isAllowedImageUrl(urlString: string): boolean {
+  try {
+    const urlObj = new URL(urlString)
+    // Only allow https
+    if (urlObj.protocol !== 'https:') return false
+    // Hostname must be in the allow-list
+    if (!allowedHostnames.includes(urlObj.hostname)) return false
+    // Optionally: only allow image file extensions
+    const imageExts = ['.jpg', '.jpeg', '.png', '.svg', '.gif']
+    if (!imageExts.some((ext) => urlObj.pathname.toLowerCase().endsWith(ext))) return false
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
@@ -21,6 +45,9 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
+          if (!isAllowedImageUrl(url)) {
+            throw new Error('Refused to fetch image: provided URL is not permitted')
+          }
           const response = await fetch(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
